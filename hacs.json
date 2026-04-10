@@ -1,5 +1,6 @@
 {
   "name": "Pstryk UPS AI Dashboard",
+  "filename": "pstryk-ups-ai-dashboard.js",
   "content_in_root": true,
   "render_readme": true,
   "homeassistant": "2023.9.0"
