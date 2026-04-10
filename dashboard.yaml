@@ -1,0 +1,510 @@
+# =============================================================================
+# PSTRYK UPS AI — LOVELACE DASHBOARD
+# =============================================================================
+# Compatible with: https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI
+# Version: 1.0.0
+#
+# Works out of the box with built-in Home Assistant cards only.
+#
+# OPTIONAL — install via HACS for richer visuals (see README for details):
+#   mini-graph-card   https://github.com/kalkih/mini-graph-card
+#   mushroom          https://github.com/piitaya/lovelace-mushroom
+#   button-card       https://github.com/custom-cards/button-card
+#   apexcharts-card   https://github.com/RomRider/apexcharts-card
+#
+# INSTALLATION:
+#   1. Settings → Dashboards → Add Dashboard → New empty dashboard
+#   2. Name it "UPS AI" and open it
+#   3. Click Edit (pencil icon) → three-dot menu → Raw configuration editor
+#   4. Replace all content with this file and click Save
+# =============================================================================
+
+title: UPS AI
+views:
+
+  # ===========================================================================
+  # VIEW 1: OVERVIEW
+  # Battery gauge, live power, current mode, controls — everything at a glance
+  # ===========================================================================
+  - title: Overview
+    path: ups-overview
+    icon: mdi:battery-charging
+    cards:
+
+      # ── Battery + Current Mode + Live Power ─────────────────────────────────
+      - type: horizontal-stack
+        cards:
+
+          - type: gauge
+            entity: sensor.pstryk_ups_battery_level
+            name: Battery
+            unit: "%"
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 60
+              yellow: 30
+              red: 0
+
+          - type: entity
+            entity: sensor.pstryk_ups_schedule_status
+            name: Current Mode
+            icon: mdi:calendar-clock
+
+          - type: entity
+            entity: sensor.pstryk_ups_household_power_draw
+            name: Power Draw
+            icon: mdi:lightning-bolt
+
+      # ── Financial & timing metrics ───────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+
+          - type: entity
+            entity: sensor.pstryk_ups_electricity_price
+            name: Price
+            icon: mdi:cash
+
+          - type: entity
+            entity: sensor.pstryk_ups_estimated_daily_savings
+            name: Est. Savings Today
+            icon: mdi:piggy-bank-outline
+
+          - type: entity
+            entity: sensor.pstryk_ups_next_charge_window
+            name: Next Charge
+            icon: mdi:battery-arrow-up-outline
+
+          - type: entity
+            entity: sensor.pstryk_ups_next_discharge_window
+            name: Next Discharge
+            icon: mdi:battery-arrow-down-outline
+
+      # ── Controls ─────────────────────────────────────────────────────────────
+      - type: entities
+        title: Controls
+        icon: mdi:tune
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Automatic Scheduling
+          - entity: switch.pstryk_ups_auto_schedule
+            name: AI Auto-Schedule
+            icon: mdi:brain
+          - type: section
+            label: Manual Overrides (use only when Auto-Schedule is OFF)
+          - entity: switch.pstryk_ups_ups_charging
+            name: Force Charging
+            icon: mdi:battery-charging
+          - entity: switch.pstryk_ups_ups_discharging
+            name: Force Discharging
+            icon: mdi:battery-minus-outline
+          - type: section
+            label: Actions
+          - entity: button.pstryk_ups_refresh_prices
+            name: Refresh Prices & Regenerate Schedule
+            icon: mdi:refresh
+
+      # ── Status summary table ─────────────────────────────────────────────────
+      # Renders a live summary using Jinja2 templates.
+      # All values come directly from integration entities — no helpers needed.
+      - type: markdown
+        title: Status Summary
+        content: |
+          {% set mode = states('sensor.pstryk_ups_schedule_status') %}
+          {% set batt = states('sensor.pstryk_ups_battery_level') | int(0) %}
+          {% set price = states('sensor.pstryk_ups_electricity_price') %}
+          {% set power = states('sensor.pstryk_ups_household_power_draw') %}
+          {% set savings = states('sensor.pstryk_ups_estimated_daily_savings') %}
+          {% set auto = states('switch.pstryk_ups_auto_schedule') %}
+          {% set proj = state_attr('sensor.pstryk_ups_battery_level', 'projected_end_level_pct') %}
+
+          {% if mode == 'charge' %}**🔋 CHARGING** — Storing energy at a favourable grid price.
+          {% elif mode == 'discharge' %}**⚡ DISCHARGING** — Supplying stored energy to the household.
+          {% elif mode == 'idle' %}**💤 IDLE** — No active charge or discharge scheduled.
+          {% else %}**❓ UNKNOWN** — Waiting for first schedule refresh.
+          {% endif %}
+
+          | Metric | Value |
+          |--------|-------|
+          | Battery now | **{{ batt }}%** {% if batt >= 60 %}🟢{% elif batt >= 30 %}🟡{% else %}🔴{% endif %} |
+          | Projected end level | {{ proj ~ '%' if proj is not none else '—' }} |
+          | Live power draw | **{{ power }} kW** |
+          | Current price | **{{ price }} PLN/kWh** |
+          | Est. savings today | **{{ savings }} PLN** |
+          | AI scheduling | **{{ 'Enabled ✅' if auto == 'on' else 'Disabled ⛔' }}** |
+
+      # ── UPGRADE NOTE ─────────────────────────────────────────────────────────
+      # Replace the three entity cards above with mushroom-entity-cards for
+      # richer display (colour, icon animation, tap actions):
+      #
+      # - type: custom:mushroom-entity-card
+      #   entity: sensor.pstryk_ups_battery_level
+      #   name: Battery
+      #   icon: mdi:battery
+      #   icon_color: >-
+      #     {% set b = states('sensor.pstryk_ups_battery_level') | int %}
+      #     {{ 'green' if b >= 60 else ('orange' if b >= 30 else 'red') }}
+      #
+      # Replace history-graph cards (Energy view) with mini-graph-card for
+      # sparklines and average/extrema overlays:
+      #
+      # - type: custom:mini-graph-card
+      #   entities:
+      #     - entity: sensor.pstryk_ups_household_power_draw
+      #       name: Power Draw
+      #   hours_to_show: 24
+      #   points_per_hour: 4
+      #   line_width: 2
+      #   show:
+      #     extrema: true
+      #     average: true
+
+
+  # ===========================================================================
+  # VIEW 2: SCHEDULE
+  # Full AI-generated 24-hour charge/discharge plan, upcoming windows, past 3h
+  # ===========================================================================
+  - title: Schedule
+    path: ups-schedule
+    icon: mdi:calendar-clock
+    cards:
+
+      # Current mode banner with auto-schedule flag
+      - type: markdown
+        content: |
+          {% set mode = states('sensor.pstryk_ups_schedule_status') %}
+          {% set auto_en = state_attr('sensor.pstryk_ups_schedule_status', 'auto_schedule_enabled') %}
+          {% if mode == 'charge' %}## 🔋 Currently: CHARGING
+          {% elif mode == 'discharge' %}## ⚡ Currently: DISCHARGING
+          {% elif mode == 'idle' %}## 💤 Currently: IDLE
+          {% else %}## ❓ Status: UNKNOWN
+          {% endif %}
+          AI Scheduling: **{{ 'Enabled' if auto_en else 'Disabled' }}**
+
+      # 24-hour schedule table
+      # Reads the 'slots' attribute from sensor.pstryk_ups_schedule_next_24h.
+      # Each slot is expected to be a dict with keys: hour, action, price
+      - type: markdown
+        title: "📅 Next 24-Hour Schedule"
+        content: |
+          {% set slots = state_attr('sensor.pstryk_ups_schedule_next_24h', 'slots') %}
+          {% if slots is not none and slots | length > 0 %}
+          | Hour | Action | Price (PLN/kWh) |
+          |:----:|:------:|:--------------:|
+          {% for s in slots -%}
+          {%- set action = s.action | default('idle') if s is mapping else 'idle' -%}
+          {%- set hour   = s.hour   | default(loop.index0) if s is mapping else loop.index0 -%}
+          {%- set pval   = s.price  | default(none)        if s is mapping else none -%}
+          | **{{ '%02d' % hour }}:00** | {% if action == 'charge' %}🔋 Charge{% elif action == 'discharge' %}⚡ Discharge{% else %}💤 Idle{% endif %} | {{ pval | round(4) if pval is not none else '—' }} |
+          {% endfor %}
+          {% else %}
+          *Schedule not yet available. Use the **Refresh Prices** button on the Overview tab.*
+          {% endif %}
+
+      # Past 3-hour summary — same structure as next-24h but historical
+      - type: markdown
+        title: "🕐 Past 3 Hours"
+        content: |
+          {% set slots = state_attr('sensor.pstryk_ups_schedule_past_3h', 'slots') %}
+          {% if slots is not none and slots | length > 0 %}
+          | Hour | Action | Price (PLN/kWh) |
+          |:----:|:------:|:--------------:|
+          {% for s in slots -%}
+          {%- set action = s.action | default('idle') if s is mapping else 'idle' -%}
+          {%- set hour   = s.hour   | default(loop.index0) if s is mapping else loop.index0 -%}
+          {%- set pval   = s.price  | default(none)        if s is mapping else none -%}
+          | **{{ '%02d' % hour }}:00** | {% if action == 'charge' %}🔋 Charge{% elif action == 'discharge' %}⚡ Discharge{% else %}💤 Idle{% endif %} | {{ pval | round(4) if pval is not none else '—' }} |
+          {% endfor %}
+          {% else %}
+          *No recent schedule history available yet.*
+          {% endif %}
+
+      # Upcoming windows + refresh button
+      - type: entities
+        title: "⏰ Upcoming Windows"
+        entities:
+          - entity: sensor.pstryk_ups_next_charge_window
+            name: Next Charge Window
+            icon: mdi:battery-arrow-up-outline
+          - entity: sensor.pstryk_ups_next_discharge_window
+            name: Next Discharge Window
+            icon: mdi:battery-arrow-down-outline
+        footer:
+          type: buttons
+          entities:
+            - entity: button.pstryk_ups_refresh_prices
+              name: Refresh Now
+              icon: mdi:refresh
+
+      # Upcoming charge/discharge windows detail from attributes
+      - type: markdown
+        title: "🗓️ Upcoming Charge Windows"
+        content: |
+          {% set wins = state_attr('sensor.pstryk_ups_next_charge_window', 'charge_windows') %}
+          {% if wins is not none and wins | length > 0 %}
+          {% for w in wins[:5] %}
+          - {{ w }}
+          {% endfor %}
+          {% else %}
+          *No upcoming charge windows in schedule.*
+          {% endif %}
+
+      - type: markdown
+        title: "🗓️ Upcoming Discharge Windows"
+        content: |
+          {% set wins = state_attr('sensor.pstryk_ups_next_discharge_window', 'discharge_windows') %}
+          {% if wins is not none and wins | length > 0 %}
+          {% for w in wins[:5] %}
+          - {{ w }}
+          {% endfor %}
+          {% else %}
+          *No upcoming discharge windows in schedule.*
+          {% endif %}
+
+
+  # ===========================================================================
+  # VIEW 3: ENERGY & HISTORY
+  # Power consumption graphs, battery history, price trend, savings
+  # ===========================================================================
+  - title: Energy
+    path: ups-energy
+    icon: mdi:chart-line
+    cards:
+
+      # Live snapshot
+      - type: glance
+        title: Live Snapshot
+        show_name: true
+        show_icon: true
+        show_state: true
+        entities:
+          - entity: sensor.pstryk_ups_household_power_draw
+            name: Power Draw
+            icon: mdi:lightning-bolt
+          - entity: sensor.pstryk_ups_battery_level
+            name: Battery
+            icon: mdi:battery
+          - entity: sensor.pstryk_ups_electricity_price
+            name: Price
+            icon: mdi:cash
+          - entity: sensor.pstryk_ups_estimated_daily_savings
+            name: Savings
+            icon: mdi:piggy-bank-outline
+
+      # Power draw — last 24 h
+      # UPGRADE: swap for custom:mini-graph-card (see comments in View 1)
+      - type: history-graph
+        title: "Power Draw — Last 24 Hours"
+        hours_to_show: 24
+        logarithmic_scale: false
+        entities:
+          - entity: sensor.pstryk_ups_household_power_draw
+            name: Power Draw (kW)
+
+      # Power draw — last 7 days
+      - type: history-graph
+        title: "Power Draw — Last 7 Days"
+        hours_to_show: 168
+        entities:
+          - entity: sensor.pstryk_ups_household_power_draw
+            name: Power Draw (kW)
+
+      # Battery level — last 24 h
+      - type: history-graph
+        title: "Battery Level — Last 24 Hours"
+        hours_to_show: 24
+        entities:
+          - entity: sensor.pstryk_ups_battery_level
+            name: Battery (%)
+
+      # Electricity price — last 24 h
+      - type: history-graph
+        title: "Electricity Price — Last 24 Hours"
+        hours_to_show: 24
+        entities:
+          - entity: sensor.pstryk_ups_electricity_price
+            name: Price (PLN/kWh)
+
+      # Estimated savings — last 7 days
+      - type: history-graph
+        title: "Estimated Daily Savings — Last 7 Days"
+        hours_to_show: 168
+        entities:
+          - entity: sensor.pstryk_ups_estimated_daily_savings
+            name: Savings (PLN)
+
+      # Daily consumption breakdown from integration attributes
+      # The integration stores up to 7 days of daily usage in an attribute.
+      - type: markdown
+        title: "📊 Daily Consumption History"
+        content: |
+          {% set daily = state_attr('sensor.pstryk_ups_household_power_draw', 'history_daily_entries') %}
+          {% if daily is not none and daily | length > 0 %}
+          | Date | Consumption |
+          |------|------------|
+          {% for entry in daily -%}
+          {%- if entry is mapping -%}
+          | {{ entry.date | default('—') }} | {{ entry.kwh | default(entry.value) | default('?') | round(2) }} kWh |
+          {%- else -%}
+          | Day {{ loop.index }} | {{ entry | round(2) }} kWh |
+          {%- endif %}
+          {% endfor %}
+          {% else %}
+          *Daily consumption data not yet available. The integration records history over time.*
+          {% endif %}
+
+      # Upcoming price list from integration attributes
+      - type: markdown
+        title: "💰 Price Forecast (from integration)"
+        content: |
+          {% set upcoming = state_attr('sensor.pstryk_ups_electricity_price', 'upcoming_prices') %}
+          {% set price_count = state_attr('sensor.pstryk_ups_electricity_price', 'price_count') %}
+          {% set last_refresh = state_attr('sensor.pstryk_ups_electricity_price', 'last_refresh') %}
+
+          **{{ price_count | default(0) }} prices loaded** — Last refreshed: {{ last_refresh | default('never') }}
+
+          {% if upcoming is not none and upcoming | length > 0 %}
+          | Slot | Price (PLN/kWh) |
+          |------|:--------------:|
+          {% for p in upcoming[:12] -%}
+          {%- if p is mapping -%}
+          | {{ p.hour | default(loop.index0) }}:00 | {{ p.price | default(p.value) | default(p) | round(4) }} |
+          {%- else -%}
+          | Slot {{ loop.index }} | {{ p | round(4) }} |
+          {%- endif %}
+          {% endfor %}
+          {% else %}
+          *No upcoming price data loaded yet. Click Refresh Prices on the Overview tab.*
+          {% endif %}
+
+
+  # ===========================================================================
+  # VIEW 4: SYSTEM DIAGNOSTICS
+  # API health, MQTT connectivity, AI prompt inspection, debug info
+  # ===========================================================================
+  - title: System
+    path: ups-system
+    icon: mdi:cog-outline
+    cards:
+
+      # API health at a glance
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.pstryk_ups_pstryk_api_status
+            name: Pstryk API
+            icon: mdi:cloud-check-outline
+          - type: entity
+            entity: sensor.pstryk_ups_claude_api_status
+            name: Claude AI
+            icon: mdi:brain
+
+      # Detailed API + MQTT diagnostics
+      - type: markdown
+        title: "🔌 API & MQTT Status Details"
+        content: |
+          {% set pstryk_status = states('sensor.pstryk_ups_pstryk_api_status') %}
+          {% set claude_status = states('sensor.pstryk_ups_claude_api_status') %}
+          {% set last_req  = state_attr('sensor.pstryk_ups_pstryk_api_status', 'last_request') %}
+          {% set last_err  = state_attr('sensor.pstryk_ups_pstryk_api_status', 'last_error') %}
+          {% set mqtt_st   = state_attr('sensor.pstryk_ups_pstryk_api_status', 'mqtt_status') %}
+          {% set src       = state_attr('sensor.pstryk_ups_claude_api_status', 'schedule_source') %}
+
+          **Pstryk API:** `{{ pstryk_status }}`
+          {% if last_req %}— Last request: `{{ last_req }}`{% endif %}
+          {% if last_err %}— ⚠️ Last error: `{{ last_err }}`{% endif %}
+
+          **Claude AI:** `{{ claude_status }}`
+          {% if src %}— Schedule source: **{{ src }}** *(claude = AI-generated, heuristic = fallback)*{% endif %}
+
+          **MQTT:** `{{ mqtt_st | default('unknown') }}`
+
+      # Schedule source detail — useful when debugging AI vs heuristic fallback
+      - type: entities
+        title: "🤖 AI Scheduling Info"
+        entities:
+          - entity: sensor.pstryk_ups_claude_api_status
+            name: Claude API Status
+            secondary_info: last-changed
+          - entity: sensor.pstryk_ups_schedule_status
+            name: Current Schedule Action
+            secondary_info: last-changed
+
+      # Last Pstryk API request URL
+      - type: entities
+        title: "🌐 Last Pstryk API Request"
+        entities:
+          - entity: sensor.pstryk_ups_last_pstryk_api_request_url
+            name: URL (state summary)
+            icon: mdi:link
+
+      # Full URL from attribute
+      - type: markdown
+        title: Full Request URL
+        content: |
+          {% set url = state_attr('sensor.pstryk_ups_last_pstryk_api_request_url', 'full_url') %}
+          {% if url %}
+          ```
+          {{ url }}
+          ```
+          {% else %}
+          *No request URL recorded yet.*
+          {% endif %}
+
+      # Last Claude prompt summary
+      - type: entities
+        title: "📝 Claude AI Prompt"
+        entities:
+          - entity: sensor.pstryk_ups_last_claude_prompt
+            name: Prompt Summary
+            icon: mdi:text-box-outline
+            secondary_info: last-changed
+
+      # Full Claude prompt (expandable via HTML details/summary)
+      # Useful for verifying what context is being sent to the AI.
+      - type: markdown
+        title: Full Prompt Sent to Claude (last run)
+        content: |
+          {% set prompt = state_attr('sensor.pstryk_ups_last_claude_prompt', 'full_prompt') %}
+          {% if prompt %}
+          <details>
+          <summary>Click to expand ({{ prompt | length }} characters)</summary>
+
+          ```
+          {{ prompt | truncate(3000, True, '… [truncated]') }}
+          ```
+          </details>
+          {% else %}
+          *No prompt recorded yet — will appear after the first AI schedule generation.*
+          {% endif %}
+
+      # Full sensor inventory — every entity exposed by the integration
+      - type: entities
+        title: "📋 All Integration Entities"
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Sensors
+          - sensor.pstryk_ups_electricity_price
+          - sensor.pstryk_ups_household_power_draw
+          - sensor.pstryk_ups_schedule_status
+          - sensor.pstryk_ups_next_charge_window
+          - sensor.pstryk_ups_next_discharge_window
+          - sensor.pstryk_ups_battery_level
+          - sensor.pstryk_ups_estimated_daily_savings
+          - sensor.pstryk_ups_pstryk_api_status
+          - sensor.pstryk_ups_claude_api_status
+          - sensor.pstryk_ups_last_pstryk_api_request_url
+          - sensor.pstryk_ups_last_claude_prompt
+          - sensor.pstryk_ups_schedule_next_24h
+          - sensor.pstryk_ups_schedule_past_3h
+          - type: section
+            label: Switches
+          - switch.pstryk_ups_auto_schedule
+          - switch.pstryk_ups_ups_charging
+          - switch.pstryk_ups_ups_discharging
+          - type: section
+            label: Buttons
+          - button.pstryk_ups_refresh_prices
