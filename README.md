@@ -2,53 +2,51 @@
 
 A ready-to-use Home Assistant Lovelace dashboard for the
 [Pstryk UPS AI](https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI) integration.
-Install the integration first, paste this dashboard YAML, and you get a complete
-four-view monitoring and control UI — no manual entity wiring required.
+Install the integration, paste the dashboard YAML, and get a complete four-view
+monitoring and control UI — no manual entity wiring required.
 
 ---
 
 ## Views
 
-| View | What it shows |
-|------|--------------|
-| **Overview** | Battery gauge, live power draw, current schedule mode, financial metrics, UPS controls |
-| **Schedule** | AI-generated 24-hour charge/discharge/idle plan, past 3-hour history, upcoming windows |
-| **Energy** | History graphs for power, battery, price, and savings; daily consumption breakdown |
-| **System** | Pstryk API & Claude AI health, MQTT status, last request URL, full Claude prompt inspection |
+| View | Contents |
+|------|---------|
+| **Overview** | Battery gauge · live power draw · schedule mode · price & savings tiles · UPS controls |
+| **Harmonogram** | AI-generated 24-hour charge/discharge/idle plan · past 3 h · upcoming windows |
+| **Energia** | History graphs (power, battery, price, savings) · daily consumption · price forecast |
+| **System** | Pstryk API & Claude AI health · MQTT status · AI prompt inspection · entity inventory |
 
 ---
 
-## Prerequisites
+## Requirements
 
 | Requirement | Notes |
 |-------------|-------|
-| Home Assistant ≥ 2023.9 | Earlier versions lack some built-in card features used here |
-| [Pstryk UPS AI integration](https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI) | Must be installed and configured first |
+| Home Assistant ≥ 2023.9 | Required for `type: grid` card and footer buttons |
+| [Pstryk UPS AI integration](https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI) | Must be installed and fully configured before loading this dashboard |
 
-The dashboard uses **only built-in Home Assistant cards** and works with zero extra dependencies.
-Optional custom cards are documented below and improve the visual experience but are not required.
+No additional HACS cards are required. Optional enhancements are listed at the end of this file.
 
 ---
 
 ## Installation
 
-### Method 1 — Raw configuration editor (simplest)
+### Method 1 — Raw configuration editor (recommended)
 
 1. In Home Assistant go to **Settings → Dashboards → Add Dashboard**.
-2. Choose **New empty dashboard**, give it a name (e.g. *UPS AI*), and open it.
+2. Choose **New empty dashboard**, name it *UPS AI*, and open it.
 3. Click the **Edit** pencil → three-dot menu → **Raw configuration editor**.
-4. Select all existing content, delete it, and paste the contents of [`dashboard.yaml`](dashboard.yaml).
+4. Select all existing content, delete it, and paste the full contents of [`dashboard.yaml`](dashboard.yaml).
 5. Click **Save**.
 
-### Method 2 — File-based dashboard (advanced, survives UI edits)
+### Method 2 — File-based dashboard (survives UI edits)
 
-1. Copy `dashboard.yaml` into your Home Assistant config directory, e.g.
-   `config/dashboards/ups-ai.yaml`.
-2. Add the following to `configuration.yaml`:
+1. Copy `dashboard.yaml` to your HA config directory, e.g. `config/dashboards/ups-ai.yaml`.
+2. Add to `configuration.yaml`:
 
    ```yaml
    lovelace:
-     mode: storage          # keep existing dashboards
+     mode: storage
      dashboards:
        ups-ai:
          mode: yaml
@@ -63,107 +61,215 @@ Optional custom cards are documented below and improve the visual experience but
 ### Method 3 — HACS custom repository
 
 1. In HACS go to **Frontend → three-dot menu → Custom repositories**.
-2. Add `https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI-Dashboard`
-   with category **Lovelace**.
-3. Download the repository.
-4. The `dashboard.yaml` file is now available in your HA config — follow
-   Method 1 or 2 above to activate it.
+2. Add `https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI-Dashboard` with category **Lovelace**.
+3. Download the repository, then follow Method 1 or 2 above to activate the dashboard.
 
 ---
 
-## Optional custom cards (HACS)
+## ⚠️ Entity ID adaptation (important)
 
-Install any of these from HACS **Frontend** to upgrade specific sections of the dashboard.
-The dashboard works fine without them; the cards listed here replace built-in cards
-with richer equivalents. Commented upgrade examples are embedded in `dashboard.yaml`.
+Entity IDs created by the integration depend on **two user-specific factors**:
 
-| Card | HACS repository | Enhances |
-|------|----------------|---------|
-| **mini-graph-card** | `kalkih/mini-graph-card` | Energy view graphs — adds sparklines, average, min/max overlays |
-| **mushroom** | `piitaya/lovelace-mushroom` | Overview entity chips — adds colour coding, animated icons, tap actions |
-| **button-card** | `custom-cards/button-card` | Controls section — fully styled charge/discharge buttons with state colours |
-| **apexcharts-card** | `RomRider/apexcharts-card` | Energy/price charts — candlestick, area, and multi-axis charts |
+| Factor | Example | Effect on entity ID |
+|--------|---------|-------------------|
+| UPS model name (set during integration setup) | `Eaton UPS` | Becomes `eaton_ups` in every ID |
+| Home Assistant language | Polish | Entity names are translated → Polish slugs in IDs |
+
+The resulting pattern is:
+
+```
+{platform}.pstryk_ups_{ups_model_slug}_{translated_entity_name_slug}
+```
+
+The `dashboard.yaml` shipped in this repository was validated against a **Polish HA with UPS model "Eaton UPS"**.
+If your setup differs, do a global find-and-replace in the file:
+
+| Find | Replace with |
+|------|-------------|
+| `eaton_ups` | your model slug (e.g. `apc_smart_ups_1500`) |
+
+To find your exact entity IDs:
+1. Go to **Developer Tools → States** in Home Assistant.
+2. Filter by `pstryk_ups`.
+3. Copy the IDs shown and compare with the table below.
 
 ---
 
 ## Entity reference
 
-All entities are created automatically by the Pstryk UPS AI integration.
-No manual configuration or helper entities are needed.
+### Sensors — Polish HA / Eaton UPS
 
-### Sensors
+| Friendly name | Entity ID | Unit |
+|---------------|-----------|------|
+| Cena energii elektrycznej | `sensor.pstryk_ups_eaton_ups_cena_energii_elektrycznej` | PLN/kWh |
+| Bieżący pobór mocy | `sensor.pstryk_ups_eaton_ups_biezacy_pobor_mocy` | kW |
+| Status harmonogramu | `sensor.pstryk_ups_eaton_ups_status_harmonogramu` | charge / discharge / idle |
+| Następne okno ładowania | `sensor.pstryk_ups_eaton_ups_nastepne_okno_ladowania` | timestamp |
+| Następne okno rozładowywania | `sensor.pstryk_ups_eaton_ups_nastepne_okno_rozladowywania` | timestamp |
+| Poziom naładowania baterii | `sensor.pstryk_ups_eaton_ups_poziom_naladowania_baterii` | % |
+| Szacowane oszczędności dzienne | `sensor.pstryk_ups_eaton_ups_szacowane_oszczednosci_dzienne` | PLN |
+| Status API Pstryk | `sensor.pstryk_ups_eaton_ups_status_api_pstryk` | ok / error / unknown |
+| Status API Claude | `sensor.pstryk_ups_eaton_ups_status_api_claude` | ok / error / unknown |
+| Harmonogram – następne 24h | `sensor.pstryk_ups_eaton_ups_harmonogram_nastepne_24h` | — |
+| Harmonogram – ostatnie 3h | `sensor.pstryk_ups_eaton_ups_harmonogram_ostatnie_3h` | — |
 
-| Entity ID | Description | Unit |
-|-----------|-------------|------|
-| `sensor.pstryk_ups_electricity_price` | Current total electricity price (TGE spot + all fees + VAT) | PLN/kWh |
-| `sensor.pstryk_ups_household_power_draw` | Live household power draw | kW |
-| `sensor.pstryk_ups_schedule_status` | Current scheduled action (`charge` / `discharge` / `idle`) | — |
-| `sensor.pstryk_ups_next_charge_window` | Timestamp of next planned charge start | timestamp |
-| `sensor.pstryk_ups_next_discharge_window` | Timestamp of next planned discharge start | timestamp |
-| `sensor.pstryk_ups_battery_level` | Battery state of charge | % |
-| `sensor.pstryk_ups_estimated_daily_savings` | Estimated PLN saved vs always-idle baseline | PLN |
-| `sensor.pstryk_ups_pstryk_api_status` | Pstryk API reachability (`ok` / `error` / `unknown`) | — |
-| `sensor.pstryk_ups_claude_api_status` | Claude AI API status (`ok` / `error` / `unknown`) | — |
-| `sensor.pstryk_ups_last_pstryk_api_request_url` | Last API endpoint called | — |
-| `sensor.pstryk_ups_last_claude_prompt` | Summary of the last prompt sent to Claude | — |
-| `sensor.pstryk_ups_schedule_next_24h` | Structured next-24h schedule (see `slots` attribute) | — |
-| `sensor.pstryk_ups_schedule_past_3h` | Structured past-3h schedule history (see `slots` attribute) | — |
+### Switches — Polish HA / Eaton UPS
 
-### Switches
+| Friendly name | Entity ID |
+|---------------|-----------|
+| Automatyczny harmonogram | `switch.pstryk_ups_eaton_ups_automatyczny_harmonogram` |
+| Ładowanie UPS | `switch.pstryk_ups_eaton_ups_ladowanie_ups` |
+| Rozładowywanie UPS | `switch.pstryk_ups_eaton_ups_rozladowywanie_ups` |
 
-| Entity ID | Description |
-|-----------|-------------|
-| `switch.pstryk_ups_auto_schedule` | Enable / disable AI-driven automatic scheduling |
-| `switch.pstryk_ups_ups_charging` | Manually force UPS charging on/off |
-| `switch.pstryk_ups_ups_discharging` | Manually force UPS discharging on/off |
+### Buttons — Polish HA / Eaton UPS
 
-### Buttons
+| Friendly name | Entity ID |
+|---------------|-----------|
+| Odśwież ceny | `button.pstryk_ups_eaton_ups_odswiez_ceny` |
 
-| Entity ID | Description |
-|-----------|-------------|
-| `button.pstryk_ups_refresh_prices` | Immediately fetch fresh prices and regenerate the schedule |
+### Generic translation keys (English HA)
+
+If your HA runs in English, entity IDs follow this pattern instead:
+
+| Translation key | Expected entity ID suffix |
+|----------------|--------------------------|
+| `current_price` | `…_current_price` |
+| `current_power` | `…_current_power` |
+| `schedule_status` | `…_schedule_status` |
+| `next_charge_window` | `…_next_charge_window` |
+| `next_discharge_window` | `…_next_discharge_window` |
+| `battery_level` | `…_battery_level` |
+| `daily_savings` | `…_daily_savings` |
+| `pstryk_api_status` | `…_pstryk_api_status` |
+| `claude_api_status` | `…_claude_api_status` |
+| `schedule_next_24h` | `…_schedule_next_24h` |
+| `schedule_past_3h` | `…_schedule_past_3h` |
+| `charging` (switch) | `…_charging` |
+| `discharging` (switch) | `…_discharging` |
+| `auto_schedule` (switch) | `…_auto_schedule` |
+| `refresh_prices` (button) | `…_refresh_prices` |
 
 ---
 
-## Key attributes used by the dashboard
+## Key attributes
 
-| Entity | Attribute | Used for |
-|--------|-----------|---------|
-| `sensor.pstryk_ups_battery_level` | `projected_end_level_pct` | Projected battery % at end of current window |
-| `sensor.pstryk_ups_schedule_status` | `schedule`, `auto_schedule_enabled` | Full 24-h plan, AI on/off flag |
-| `sensor.pstryk_ups_schedule_next_24h` | `slots` | 24-h schedule table (list of `{hour, action, price}`) |
-| `sensor.pstryk_ups_schedule_past_3h` | `slots` | Past 3-h table |
-| `sensor.pstryk_ups_next_charge_window` | `charge_windows` | List of upcoming charge windows |
-| `sensor.pstryk_ups_next_discharge_window` | `discharge_windows` | List of upcoming discharge windows |
-| `sensor.pstryk_ups_electricity_price` | `upcoming_prices`, `price_count`, `last_refresh` | Price forecast table |
-| `sensor.pstryk_ups_household_power_draw` | `history_daily_entries`, `history_hourly_entries` | Daily consumption breakdown |
-| `sensor.pstryk_ups_pstryk_api_status` | `last_request`, `last_error`, `mqtt_status` | Diagnostics panel |
-| `sensor.pstryk_ups_claude_api_status` | `schedule_source`, `last_prompt` | AI vs heuristic fallback indicator |
-| `sensor.pstryk_ups_last_claude_prompt` | `full_prompt` | Full prompt text in System view |
-| `sensor.pstryk_ups_last_pstryk_api_request_url` | `full_url` | Full URL in System view |
+| Entity (Polish ID suffix) | Attribute | Used by dashboard for |
+|--------------------------|-----------|----------------------|
+| `…_poziom_naladowania_baterii` | `projected_end_level_pct` | Projected battery % at end of current window |
+| `…_status_harmonogramu` | `auto_schedule_enabled` | AI on/off flag in schedule banner |
+| `…_harmonogram_nastepne_24h` | `slots` | 24-hour plan table — list of `{hour, action, price}` |
+| `…_harmonogram_ostatnie_3h` | `slots` | Past 3-hour table — same structure |
+| `…_nastepne_okno_ladowania` | `charge_windows` | Upcoming charge windows list |
+| `…_nastepne_okno_rozladowywania` | `discharge_windows` | Upcoming discharge windows list |
+| `…_cena_energii_elektrycznej` | `upcoming_prices`, `price_count`, `last_refresh` | Price forecast table |
+| `…_biezacy_pobor_mocy` | `history_daily_entries`, `history_hourly_entries` | Daily consumption breakdown |
+| `…_status_api_pstryk` | `last_request`, `last_error`, `mqtt_status` | System diagnostics panel |
+| `…_status_api_claude` | `schedule_source`, `last_prompt` | AI vs heuristic fallback indicator |
+
+---
+
+## Dashboard cards overview
+
+All cards use **built-in Home Assistant card types only** — no HACS cards required.
+
+| Card type | Used for |
+|-----------|---------|
+| `gauge` | Battery level with green/yellow/red severity bands |
+| `entity` | Individual sensor values (mode, power, price) |
+| `grid` | 1-column layout for financial metric tiles |
+| `entities` | Switch controls, button, entity inventory |
+| `glance` | Compact multi-sensor snapshots |
+| `history-graph` | Time-series graphs for power, battery, price, savings |
+| `markdown` | Jinja2-templated status summaries and schedule tables |
+
+### How template cards work
+
+Cards on the **Harmonogram** and **Energia** views use Jinja2 templates to read entity
+states and attributes directly, without needing hardcoded entity IDs in every property:
+
+```jinja2
+{% set slots = state_attr('sensor.pstryk_ups_eaton_ups_harmonogram_nastepne_24h', 'slots') %}
+{% set slots = slots if (slots is iterable and slots is not string) else [] %}
+{% if slots | length > 0 %}
+  ...render table...
+{% endif %}
+```
+
+The `iterable` guard is required because the integration stores `0` (integer) as a
+placeholder when data has not been populated yet — calling `| length` on an integer
+raises a `TypeError`.
+
+---
+
+## Optional custom cards (HACS Frontend)
+
+The dashboard works without these. Install to upgrade specific sections.
+
+| Card | Repository | Improves |
+|------|-----------|---------|
+| **mini-graph-card** | `kalkih/mini-graph-card` | Energy graphs — sparklines, average line, min/max markers |
+| **mushroom** | `piitaya/lovelace-mushroom` | Entity display — colour coding, animated icons, tap actions |
+| **button-card** | `custom-cards/button-card` | Controls — styled charge/discharge buttons with live state colours |
+| **apexcharts-card** | `RomRider/apexcharts-card` | Advanced charts — area, candlestick, multi-axis price/power overlay |
+
+Commented-out upgrade examples for each card are embedded directly in `dashboard.yaml`.
 
 ---
 
 ## Troubleshooting
 
-**Dashboard shows "Entity not found" or "unavailable"**
-→ Make sure the Pstryk UPS AI integration is installed, configured, and has completed
-at least one successful price refresh. Check **Settings → Devices & Services**.
+**"Entity not found" on all cards**
+→ The integration is not installed or hasn't finished its first price refresh.
+Check **Settings → Devices & Services** and confirm *Pstryk UPS AI Optimizer* is listed.
 
-**Schedule table is empty**
-→ Click **Refresh Prices & Regenerate Schedule** on the Overview tab and wait ~30 seconds.
+**Entity IDs don't match**
+→ Your UPS model name or HA language differs from the example.
+Go to **Developer Tools → States**, filter by `pstryk_ups`, and do a
+find-and-replace of `eaton_ups` with your actual model slug in `dashboard.yaml`.
+
+**Schedule table shows "Harmonogram jeszcze niedostępny"**
+→ Click **Odśwież ceny i wygeneruj harmonogram** (Overview tab) and wait ~30 seconds.
+The Claude AI call can take up to 20 s on first run.
+
+**`TypeError: object of type 'int' has no len()`**
+→ An attribute hasn't been populated yet and contains `0` instead of a list.
+The dashboard guards against this with an `is iterable` check — if you still see this
+error, the template card may be from an older version. Re-paste `dashboard.yaml`.
 
 **"heuristic" shown as schedule source instead of "claude"**
-→ The Claude AI API call failed and the integration fell back to a rule-based schedule.
-Check your Anthropic API key and the Claude API status in the System view.
+→ The Claude AI API call failed and the integration fell back to rule-based scheduling.
+Check your Anthropic API key and review the Claude API status in the **System** tab.
 
-**Cards show "Template error"**
-→ Home Assistant's template engine is strict about undefined variables. If the
-integration version you're running exposes attributes with different names, the
-template will gracefully show `—` or an italic fallback message rather than crashing.
+**Cards show "Template error" / red error banner**
+→ Open **Developer Tools → Template** in HA and paste the failing template to inspect
+the exact error. Most commonly caused by a mismatched entity ID.
+
+---
+
+## Repository structure
+
+```
+HACS-Pstryk-UPS-AI-Dashboard/
+├── dashboard.yaml              # Lovelace dashboard — paste into Raw Config Editor
+├── pstryk-ups-ai-dashboard.js  # HACS Lovelace plugin entry point (version banner only)
+├── hacs.json                   # HACS metadata
+├── info.md                     # Short description shown in HACS UI
+└── README.md                   # This file
+```
+
+---
+
+## Changelog
+
+| Version | Changes |
+|---------|---------|
+| 1.3.0 | Financial metrics grid changed from 2×2 to 1×4 single column |
+| 1.2.0 | Removed auto-entities dependency; restored gauge and history-graph cards with exact entity IDs |
+| 1.1.0 | Added HACS compliance JS file; switched to auto-entities for model-agnostic entity discovery |
+| 1.0.0 | Initial release — four views, all 15 entities, built-in cards only |
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) if present, otherwise use freely.
+MIT — use freely.
