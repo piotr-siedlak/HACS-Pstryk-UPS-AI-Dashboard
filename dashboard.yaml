@@ -2,7 +2,7 @@
 # PSTRYK UPS AI — LOVELACE DASHBOARD
 # =============================================================================
 # Compatible with: https://github.com/piotr-siedlak/HACS-Pstryk-UPS-AI
-# Version: 1.2.0
+# Version: 1.3.0
 #
 # ⚠️  ENTITY IDs INCLUDE YOUR UPS MODEL NAME AND YOUR HA LOCALE.
 #     The IDs below were generated for UPS model "Eaton UPS" on a Polish HA.
@@ -65,8 +65,10 @@ views:
             name: Pobór mocy
             icon: mdi:lightning-bolt
 
-      # ── Financial & timing metrics ───────────────────────────────────────────
-      - type: horizontal-stack
+      # ── Financial & timing metrics — 2×2 grid for readability ──────────────
+      - type: grid
+        columns: 2
+        square: false
         cards:
 
           - type: entity
@@ -168,7 +170,8 @@ views:
         title: "📅 Harmonogram na następne 24h"
         content: |
           {% set slots = state_attr('sensor.pstryk_ups_eaton_ups_harmonogram_nastepne_24h', 'slots') %}
-          {% if slots is not none and slots | length > 0 %}
+          {% set slots = slots if (slots is iterable and slots is not string) else [] %}
+          {% if slots | length > 0 %}
           | Godzina | Akcja | Cena (PLN/kWh) |
           |:-------:|:-----:|:-------------:|
           {% for slot in slots -%}
@@ -186,7 +189,8 @@ views:
         title: "🕐 Ostatnie 3 godziny"
         content: |
           {% set slots = state_attr('sensor.pstryk_ups_eaton_ups_harmonogram_ostatnie_3h', 'slots') %}
-          {% if slots is not none and slots | length > 0 %}
+          {% set slots = slots if (slots is iterable and slots is not string) else [] %}
+          {% if slots | length > 0 %}
           | Godzina | Akcja | Cena (PLN/kWh) |
           |:-------:|:-----:|:-------------:|
           {% for slot in slots -%}
@@ -221,7 +225,8 @@ views:
         title: "🗓️ Nadchodzące okna ładowania"
         content: |
           {% set wins = state_attr('sensor.pstryk_ups_eaton_ups_nastepne_okno_ladowania', 'charge_windows') %}
-          {% if wins is not none and wins | length > 0 %}
+          {% set wins = wins if (wins is iterable and wins is not string) else [] %}
+          {% if wins | length > 0 %}
           {% for w in wins[:6] %}- {{ w }}
           {% endfor %}
           {% else %}
@@ -232,7 +237,8 @@ views:
         title: "🗓️ Nadchodzące okna rozładowania"
         content: |
           {% set wins = state_attr('sensor.pstryk_ups_eaton_ups_nastepne_okno_rozladowywania', 'discharge_windows') %}
-          {% if wins is not none and wins | length > 0 %}
+          {% set wins = wins if (wins is iterable and wins is not string) else [] %}
+          {% if wins | length > 0 %}
           {% for w in wins[:6] %}- {{ w }}
           {% endfor %}
           {% else %}
@@ -314,7 +320,8 @@ views:
         title: "📊 Historia dobowego zużycia"
         content: |
           {% set daily = state_attr('sensor.pstryk_ups_eaton_ups_biezacy_pobor_mocy', 'history_daily_entries') %}
-          {% if daily is not none and daily | length > 0 %}
+          {% set daily = daily if (daily is iterable and daily is not string) else [] %}
+          {% if daily | length > 0 %}
           | Data | Zużycie |
           |------|---------|
           {% for entry in daily -%}
@@ -333,12 +340,13 @@ views:
         title: "💰 Prognoza cen"
         content: |
           {% set upcoming = state_attr('sensor.pstryk_ups_eaton_ups_cena_energii_elektrycznej', 'upcoming_prices') %}
+          {% set upcoming = upcoming if (upcoming is iterable and upcoming is not string) else [] %}
           {% set count    = state_attr('sensor.pstryk_ups_eaton_ups_cena_energii_elektrycznej', 'price_count') %}
           {% set refresh  = state_attr('sensor.pstryk_ups_eaton_ups_cena_energii_elektrycznej', 'last_refresh') %}
 
           **{{ count | default(0) }} cen załadowanych** — Ostatnie odświeżenie: {{ refresh | default('nigdy') }}
 
-          {% if upcoming is not none and upcoming | length > 0 %}
+          {% if upcoming | length > 0 %}
           | Godzina | Cena (PLN/kWh) |
           |:-------:|:-------------:|
           {% for p in upcoming[:12] -%}
